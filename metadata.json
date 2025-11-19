@@ -1,0 +1,5 @@
+{
+  "name": "Life Circle Simulation",
+  "description": "A generative simulation of balls interacting within a confined circular ecosystem. Features collision physics and probability-based reproduction.",
+  "requestFramePermissions": []
+}
