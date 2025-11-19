@@ -12,7 +12,11 @@ import {
   MAX_BALL_RADIUS,
   MALE_COLOR, 
   FEMALE_COLOR,
-  CONTAINER_BORDER_COLOR
+  CONTAINER_BORDER_COLOR,
+  BALL_LIFETIME_MS,
+  MALE_KILL_CHANCE,
+  FEMALE_KILL_CHANCE,
+  TWIN_CHANCE
 } from '../constants';
 
 interface PetriDishProps {
@@ -51,7 +55,6 @@ export const PetriDish: React.FC<PetriDishProps> = ({
     radius = Math.max(MIN_BALL_RADIUS, Math.min(MAX_BALL_RADIUS, radius));
 
     // Speed is inversely proportional to size
-    // Standard BALL_RADIUS gets 1.0 multiplier. Smaller = Faster, Larger = Slower.
     const sizeMultiplier = BALL_RADIUS / radius;
     const speed = (Math.random() * 0.5 + 0.5) * config.ballSpeed * sizeMultiplier;
     
@@ -68,7 +71,8 @@ export const PetriDish: React.FC<PetriDishProps> = ({
       gender,
       color: gender === Gender.Male ? MALE_COLOR : FEMALE_COLOR,
       lastBreedTime: Date.now() + 2000, // Grace period for newborns
-      age: 0
+      age: 0,
+      createdAt: Date.now()
     };
   };
 
@@ -106,6 +110,7 @@ export const PetriDish: React.FC<PetriDishProps> = ({
     }
 
     const currentRadius = containerRadiusRef.current;
+    const now = Date.now();
 
     // Clear canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -129,8 +134,12 @@ export const PetriDish: React.FC<PetriDishProps> = ({
 
     // Logic Update only if running
     if (isRunning) {
+       // Remove old balls first
+       ballsRef.current = ballsRef.current.filter(b => now - b.createdAt < BALL_LIFETIME_MS);
+
        const balls = ballsRef.current;
        const newBorns: Ball[] = [];
+       const deadBallIds = new Set<string>();
 
        // 1. Move balls
        balls.forEach(ball => {
@@ -146,27 +155,27 @@ export const PetriDish: React.FC<PetriDishProps> = ({
          const dist = Math.sqrt(dx * dx + dy * dy);
 
          if (dist + ball.radius > currentRadius) {
-           // Normal vector at collision point
            const nx = dx / dist;
            const ny = dy / dist;
 
-           // Reflect velocity vector: v' = v - 2(v . n)n
            const dot = ball.velocity.x * nx + ball.velocity.y * ny;
            ball.velocity.x = ball.velocity.x - 2 * dot * nx;
            ball.velocity.y = ball.velocity.y - 2 * dot * ny;
 
-           // Push back inside to prevent sticking
            const overlap = dist + ball.radius - currentRadius;
            ball.position.x -= nx * overlap;
            ball.position.y -= ny * overlap;
          }
        });
 
-       // 3. Ball Collision & Breeding
+       // 3. Ball Collision & Logic
        for (let i = 0; i < balls.length; i++) {
+         const b1 = balls[i];
+         if (deadBallIds.has(b1.id)) continue;
+
          for (let j = i + 1; j < balls.length; j++) {
-           const b1 = balls[i];
            const b2 = balls[j];
+           if (deadBallIds.has(b2.id)) continue;
 
            const dx = b2.position.x - b1.position.x;
            const dy = b2.position.y - b1.position.y;
@@ -175,26 +184,30 @@ export const PetriDish: React.FC<PetriDishProps> = ({
 
            if (distSq < minDist * minDist) {
              const dist = Math.sqrt(distSq);
-             
-             // --- Physics Resolution (Elastic) ---
              const nx = dx / dist;
              const ny = dy / dist;
              
+             // --- Handle Same Gender Destruction ---
+             if (b1.gender === b2.gender) {
+               const killChance = b1.gender === Gender.Male ? MALE_KILL_CHANCE : FEMALE_KILL_CHANCE;
+               if (Math.random() < killChance) {
+                 // Kill one of them randomly
+                 const victim = Math.random() > 0.5 ? b1 : b2;
+                 deadBallIds.add(victim.id);
+                 // We skip physics bounce if a death occurs to represent absorption/destruction
+                 continue; 
+               }
+             }
+
+             // --- Physics Resolution (Elastic) ---
              // Relative velocity
              const dvx = b2.velocity.x - b1.velocity.x;
              const dvy = b2.velocity.y - b1.velocity.y;
-             
              const dot = dvx * nx + dvy * ny;
 
              if (dot < 0) {
-                // Mass proportional to area ~ radius^2
                 const m1 = b1.radius * b1.radius;
                 const m2 = b2.radius * b2.radius;
-                
-                // Momentum conservation (1D along normal)
-                // v1' = (v1(m1-m2) + 2m2v2) / (m1+m2)
-                // But simpler impulse method often looks better for simple balls
-                // Standard elastic collision formula:
                 const impulse = (2 * dot) / (m1 + m2);
                 
                 b1.velocity.x += impulse * m2 * nx;
@@ -202,18 +215,17 @@ export const PetriDish: React.FC<PetriDishProps> = ({
                 b2.velocity.x -= impulse * m1 * nx;
                 b2.velocity.y -= impulse * m1 * ny;
                 
-                // Separate to prevent sticking
+                // Separate
                 const overlap = (minDist - dist) / 2;
                 b1.position.x -= nx * overlap;
                 b1.position.y -= ny * overlap;
                 b2.position.x += nx * overlap;
                 b2.position.y += ny * overlap;
 
-                // --- Breeding Logic ---
-                const now = Date.now();
+                // --- Breeding Logic (Different Gender) ---
                 if (
                    b1.gender !== b2.gender && 
-                   balls.length + newBorns.length < config.maxPopulation &&
+                   balls.length + newBorns.length - deadBallIds.size < config.maxPopulation &&
                    now - b1.lastBreedTime > config.breedCooldown &&
                    now - b2.lastBreedTime > config.breedCooldown
                 ) {
@@ -221,22 +233,27 @@ export const PetriDish: React.FC<PetriDishProps> = ({
                       const spawnX = (b1.position.x + b2.position.x) / 2;
                       const spawnY = (b1.position.y + b2.position.y) / 2;
                       
-                      // Inherit size: Average of parents + small random variance
                       const avgRadius = (b1.radius + b2.radius) / 2;
-                      const variance = (Math.random() * 2 - 1); // +/- 1px
+                      const variance = (Math.random() * 2 - 1); 
                       
-                      const baby = generateBall(
-                          `baby-${now}-${Math.random()}`, 
-                          spawnX, 
-                          spawnY, 
-                          undefined, 
-                          avgRadius + variance
-                      );
+                      // Check for twins
+                      const spawnCount = Math.random() < TWIN_CHANCE ? 2 : 1;
+
+                      for (let k=0; k<spawnCount; k++) {
+                         // Slight offset for twins so they don't spawn perfectly inside each other
+                         const offset = k === 0 ? 0 : 2; 
+                         const baby = generateBall(
+                            `baby-${now}-${Math.random()}`, 
+                            spawnX + offset, 
+                            spawnY + offset, 
+                            undefined, 
+                            avgRadius + variance
+                         );
+                         newBorns.push(baby);
+                      }
                       
                       b1.lastBreedTime = now;
                       b2.lastBreedTime = now;
-                      
-                      newBorns.push(baby);
                    }
                 }
              }
@@ -244,13 +261,22 @@ export const PetriDish: React.FC<PetriDishProps> = ({
          }
        }
        
+       // Commit death and birth
+       if (deadBallIds.size > 0) {
+         ballsRef.current = ballsRef.current.filter(b => !deadBallIds.has(b.id));
+       }
        if (newBorns.length > 0) {
-         ballsRef.current = [...balls, ...newBorns];
+         ballsRef.current = [...ballsRef.current, ...newBorns];
        }
     }
 
     // Draw Balls
     ballsRef.current.forEach(ball => {
+      // Visual indicator for age (fade out slightly near death)
+      const agePercent = (now - ball.createdAt) / BALL_LIFETIME_MS;
+      const opacity = 1 - Math.pow(agePercent, 4); // Stays opaque mostly, fades at very end
+
+      ctx.globalAlpha = Math.max(0.1, opacity);
       ctx.beginPath();
       ctx.arc(ball.position.x, ball.position.y, ball.radius, 0, Math.PI * 2);
       ctx.fillStyle = ball.color;
@@ -266,6 +292,7 @@ export const PetriDish: React.FC<PetriDishProps> = ({
       ctx.beginPath();
       ctx.arc(ball.position.x - (ball.radius/3), ball.position.y - (ball.radius/3), ball.radius/3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1.0;
     });
     
     // Update Stats

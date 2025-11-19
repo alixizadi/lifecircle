@@ -1,3 +1,4 @@
+
 export enum Gender {
   Male = 'MALE',
   Female = 'FEMALE'
@@ -17,6 +18,7 @@ export interface Ball {
   color: string;
   lastBreedTime: number; // Timestamp to prevent instant re-breeding
   age: number; // Frames alive
+  createdAt: number; // Timestamp when ball was created
 }
 
 export interface SimulationStats {

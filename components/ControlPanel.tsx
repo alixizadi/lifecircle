@@ -23,7 +23,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   return (
     <div className="absolute top-4 left-4 bg-slate-800/90 backdrop-blur-md border border-slate-700 p-6 rounded-2xl shadow-2xl w-80 text-slate-200 z-10 max-h-[90vh] overflow-y-auto transition-all duration-300 hover:border-slate-600">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-green-400">
+        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-red-400">
           Life Cycle
         </h1>
         <Settings2 className="w-5 h-5 text-slate-400" />
@@ -40,8 +40,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <div className="text-lg font-bold text-blue-400">{stats.males}</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-green-400 uppercase tracking-wider">Green</div>
-          <div className="text-lg font-bold text-green-400">{stats.females}</div>
+          <div className="text-xs text-red-400 uppercase tracking-wider">Red</div>
+          <div className="text-lg font-bold text-red-400">{stats.females}</div>
         </div>
       </div>
 
@@ -119,7 +119,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             step="10"
             value={config.maxPopulation}
             onChange={(e) => onConfigChange('maxPopulation', parseInt(e.target.value))}
-            className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+            className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
           />
         </div>
         
@@ -141,8 +141,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
       
       <div className="mt-6 text-[10px] text-slate-500 text-center leading-relaxed">
-        Blue balls are Male. Green balls are Female. The circle grows over time. 
-        Balls have different sizes and speeds (smaller = faster). Newborns inherit size from parents.
+        Blue (Male) & Red (Female). <br/>
+        Balls die after 1 min. Same colors fight. <br/>
+        10% chance for twins!
       </div>
     </div>
   );

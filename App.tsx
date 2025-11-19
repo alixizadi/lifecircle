@@ -39,7 +39,7 @@ const App: React.FC = () => {
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
          <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-blue-900/20 blur-[120px]" />
-         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-green-900/20 blur-[120px]" />
+         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-red-900/20 blur-[120px]" />
       </div>
 
       <ControlPanel
